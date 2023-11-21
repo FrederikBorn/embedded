@@ -43,6 +43,16 @@ int state = 0;
 const int leds[] = {GREEN_LED, BLUE_LED, YELLOW_LED, RED_LED};
 const int buttons[] = {GREEN_BUTTON, BLUE_BUTTON, YELLOW_BUTTON, RED_BUTTON};
 
+//Function declarations
+void setupLEDs(const int pLeds[], int size)
+void setupButtons(const int pButtons[], int size)
+void lightLEDs(const int leds[], int size, int duration)
+void bereitschaftsPhase()
+void vorfuehrPhase();
+void nachahmPhase(int sequence[]);
+void verlorenSequenz();
+void zwischenSequenz();
+void endModus();
 
 int main(void){
     //Set up LEDs
@@ -80,7 +90,7 @@ int main(void){
 }
 
 //Setting up LEDs as Output
-void setupLEDs(int[] pLeds, int size){
+void setupLEDs(const int pLeds[], int size){
     for(int i = 0; i < size; i++){
         //Disable IOF
         REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << pLeds[i]);
@@ -94,7 +104,7 @@ void setupLEDs(int[] pLeds, int size){
 }
 
 //Setting up Buttons as Input
-void setupButtons(int[] pButtons, int size){
+void setupButtons(const int pButtons[], int size){
     for(int i = 0; i < size; i++){
         //Disable IOF
         REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << pButtons[i]);
@@ -104,13 +114,13 @@ void setupButtons(int[] pButtons, int size){
 	    REG(GPIO_BASE + GPIO_INPUT_EN) |= (1 << pButtons[i]);
         //Disable Output
 	    REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << pButtons[i]);
-        //TODO:Brauch ich das? (Set Initial Output to 0)
-	    REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << pButtons[i]);
+        //Set Initial Output to 1
+	    REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << pButtons[i]);
     }
 }
 
 //Lights given amount of LEDs for the given time
-void lightLEDs(int[] leds, int size, int duration){
+void lightLEDs(const int leds[], int size, int duration){
     //LEDs on
     for(int i = 0; i < size; i++){
         REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << leds[i]);
@@ -155,7 +165,7 @@ void vorfuehrPhase(){
     nachahmPhase(sequence);
 }
 
-void nachahmPhase(int[] sequence){
+void nachahmPhase(int sequence[]){
 
 
     //pollen -> Array
