@@ -3,8 +3,6 @@
 #include "platform.h"
 #include "wrap.h"
 #include "startup.h"
-#include <stdio.h>
-#include <time.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -24,35 +22,33 @@
 #define YELLOW_BUTTON 1 //Pin 9 = GPIO 1
 #define RED_BUTTON 2  //Pin 10 = GPIO 2
 
-#define T_SHORT 1600
-#define T_LONG 3200
-#define T_VERY_LONG 6400
+#define T_SHORT 1000
+#define T_LONG 2000
+#define T_VERY_LONG 4000
+
+#define SYS_SPEED 5//~60 for the real hardware, 5-10 on simulator, choose higher the faster the processor
 
 
-int level = 1;
-int n = 3;
-int t = T_LONG;
+static uint32_t level = 1;
+static int n = 3;
+static int t = T_LONG;
+static int state = 0;
 
-int state = 0;
+static const int leds[] = {GREEN_LED, BLUE_LED, YELLOW_LED, RED_LED};
+static const int buttons[] = {GREEN_BUTTON, BLUE_BUTTON, YELLOW_BUTTON, RED_BUTTON};
 
-const int leds[] = {GREEN_LED, BLUE_LED, YELLOW_LED, RED_LED};
-const int buttons[] = {GREEN_BUTTON, BLUE_BUTTON, YELLOW_BUTTON, RED_BUTTON};
-
-//Function declarations
-//Duplicate with empty.c
 void setupLEDs(const int pLeds[], int size);
 void setupButtons(const int pButtons[], int size);
 void lightLEDs(const int leds[], int size, int duration);
 int pollButtons(const int pButtons[], int size);
 void delay(int mod);
 
-
-void bereitschaftsPhase();
-void vorfuehrPhase();
+void bereitschaftsPhase(void);
+void vorfuehrPhase(void);
 void nachahmPhase(int sequence[]);
-void verlorenSequenz();
-void zwischenSequenz();
-void endModus();
+void verlorenSequenz(void);
+void zwischenSequenz(void);
+void endModus(void);
 
 int main(void){
     //Set up LEDs
@@ -85,7 +81,7 @@ int main(void){
 
             default:
             //This shouldnt happen
-            printf("Something bad happened!");
+            break;
         }
     }
 }
@@ -94,13 +90,13 @@ int main(void){
 void setupLEDs(const int pLeds[], int size){
     for(int i = 0; i < size; i++){
         //Disable IOF
-        REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << pLeds[i]);
+        REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1u << ((uint32_t)pLeds[i]));
         //Disable Input
-	    REG(GPIO_BASE + GPIO_INPUT_EN) &= ~(1 << pLeds[i]);
+	    REG(GPIO_BASE + GPIO_INPUT_EN) &= ~(1u << ((uint32_t)pLeds[i]));
         //Enable Output
-	    REG(GPIO_BASE + GPIO_OUTPUT_EN) |= (1 << pLeds[i]);
+	    REG(GPIO_BASE + GPIO_OUTPUT_EN) |= (1u << ((uint32_t)pLeds[i]));
         //Set Initial Output 0
-	    REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << pLeds[i]);
+	    REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1u << ((uint32_t)pLeds[i]));
     }
 }
 
@@ -108,15 +104,15 @@ void setupLEDs(const int pLeds[], int size){
 void setupButtons(const int pButtons[], int size){
     for(int i = 0; i < size; i++){
         //Disable IOF
-        REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1 << pButtons[i]);
+        REG(GPIO_BASE + GPIO_IOF_EN) &= ~(1u << ((uint32_t)pButtons[i]));
         //Enable Pull-Up
-	    REG(GPIO_BASE + GPIO_PUE) |= (1 << pButtons[i]);
+	    REG(GPIO_BASE + GPIO_PUE) |= (1u << ((uint32_t)pButtons[i]));
         //Enable Input
-	    REG(GPIO_BASE + GPIO_INPUT_EN) |= (1 << pButtons[i]);
+	    REG(GPIO_BASE + GPIO_INPUT_EN) |= (1u << ((uint32_t)pButtons[i]));
         //Disable Output
-	    REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1 << pButtons[i]);
+	    REG(GPIO_BASE + GPIO_OUTPUT_EN) &= ~(1u << ((uint32_t)pButtons[i]));
         //Set Initial Output to 1
-	    REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << pButtons[i]);
+	    REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1u << ((uint32_t)pButtons[i]));
     }
 }
 
@@ -124,13 +120,13 @@ void setupButtons(const int pButtons[], int size){
 void lightLEDs(const int leds[], int size, int duration){
     //LEDs on
     for(int i = 0; i < size; i++){
-        REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1 << leds[i]);
+        REG(GPIO_BASE + GPIO_OUTPUT_VAL) |= (1u << ((uint32_t)leds[i]));
     }
     //Wait
     delay(duration);
     //LEDs off
     for(int i = 0; i < size; i++){
-        REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1 << leds[i]);
+        REG(GPIO_BASE + GPIO_OUTPUT_VAL) &= ~(1u << ((uint32_t)leds[i]));
     }
 }
 
@@ -139,24 +135,20 @@ int pollButtons(const int pButtons[], int size){
 	int buttonsPressed = 0;
 	int firstButton = -1;
 	for(int i = 0; i < size; i++){
-		if ((REG(GPIO_BASE + GPIO_INPUT_VAL) & (1 << pButtons[i])) == 0){
+		if ((REG(GPIO_BASE + GPIO_INPUT_VAL) & (1u << ((uint32_t)pButtons[i]))) == 0u){
 			firstButton = i;
 			buttonsPressed += 1;
 		}
 	}
-	return buttonsPressed > 1 ? -2 : firstButton;
+	return ((buttonsPressed > 1) ? -2 : firstButton);
 }
 
-//Mit mod 1000 in etwa 0.8sec auf Simulator -> T_VERY_LONG etwa 3 sec
 void delay(int mod)
 {
-    volatile uint32_t i = 0;
-	for (i = 0; i < (150*mod); i++){}
+	for (int i = 0; i < (((int)SYS_SPEED)*15*mod); i++){}
 }
 
-void bereitschaftsPhase(){
-    //TODO: Remove Debug print
-    printf("Bereitschaft");
+void bereitschaftsPhase(void){
     level = 1;
     n = 3;
     t = T_LONG;
@@ -170,29 +162,25 @@ void bereitschaftsPhase(){
         if(j > -1){
             pressed = true;
         }
-        led = (led >= 3 ? 0 : led + 1);
+        led = ((led >= 3) ? 0 : (led + 1));
     }
     //->Vorführphase
     state = 1;
 }
 
-void vorfuehrPhase(){
-    //TODO: Remove Debug print
-    printf("Vorfuehr");
+void vorfuehrPhase(void){
     //Pre-Sequence
     const int ledsToLight[2] = {BLUE_LED, YELLOW_LED};
     lightLEDs(ledsToLight, 2, T_SHORT);
     delay(T_SHORT);
     //Generating main sequence
     //Init with size 12(Max n) as n doesnt work for some reason
-    int sequence[12] = {};
+    int sequence[12] = {0};
     for(int i = 0; i < n; i++){
         sequence[i] = rand() % 4; //Random int between 0 and 3
     }
     //Showing sequence for t each with T_SHORT pause in between
     for(int i = 0; i < n; i++){
-        //TODO: Remove Debug print
-        printf("Sequenz %d: LED %d", i, sequence[i]);
         const int ledToLight[1] = {leds[sequence[i]]};
         lightLEDs(ledToLight, 1, t);
         delay(T_SHORT);
@@ -204,9 +192,6 @@ void vorfuehrPhase(){
 }
 
 void nachahmPhase(int sequence[]){
-    //TODO: Remove Debug print
-    printf("Nachahm");
-
     int pollRate = 200; //Magic Number :D
     int iterations = t/pollRate; //Every iteration takes at least <pollrate>units due to poll delay -> all iterations should roughly take t
     int j = -1;
@@ -217,17 +202,15 @@ void nachahmPhase(int sequence[]){
             delay(200);
             j = pollButtons(buttons, 4);
             if(j != -1){
-                i = iterations;
-                printf("Polled %d", j);
+                break;
             }
         }
         if(j != sequence[h]){
             lost = true;
-            h = n;
+            break;
         }
         else{
             int ledToLight[1] = {leds[sequence[h]]};
-            printf("COrrect, lighting %d", sequence[h]);
             lightLEDs(ledToLight, 1, T_SHORT);
         }
     }
@@ -241,25 +224,37 @@ void nachahmPhase(int sequence[]){
     }
 }
 
-void verlorenSequenz(){
-    //TODO: Remove Debug print
-    printf("Verloren");
+void verlorenSequenz(void){
     //Lost-Sequence/End-Flash
     for(int i = 0; i < 2; i++){
         const int ledsToLight[2] = {RED_LED, GREEN_LED};
         lightLEDs(ledsToLight, 2, T_SHORT);
     }
     
-    //TODO:Letztes Level als Binäre Zahl, LSB rechts(rot)
-    lightLEDs(leds, 4, T_VERY_LONG);
-    printf("Letztes geschafftes Level: %d", level-1);
+    level -= 1u;
+    bool bin[4] = {false, false, false, false};
+    for(int i = 0; i < 4; i++){
+        if((level & (1u << ((uint32_t)i))) > 0u){
+            bin[3-i] = true;
+        }
+    }
+    
+    int count = 0;
+    int ledsToLight[4] = {0};
+    for(int i = 0; i < 4; i++){
+        if(bin[i]){
+            ledsToLight[count] = leds[i];
+            count += 1;
+        }
+    }
+
+    lightLEDs(ledsToLight, count, T_VERY_LONG);
+
     //->Bereitschaftsmodus
     state = 0;
 }
 
-void zwischenSequenz(){
-    //TODO: Remove Debug print
-    printf("Zwischen");
+void zwischenSequenz(void){
     //Mid-Sequence
     for(int i = 0; i < 2; i++){
         const int ledsToLight[2] = {GREEN_LED, YELLOW_LED};
@@ -268,25 +263,22 @@ void zwischenSequenz(){
         lightLEDs(ledsToLight2, 2, T_SHORT);
     }
 
-    if(level > 10){
+    if(level > 10u){
         //-> Endmodus
         state = 4;
     }
     else{
         level++;
         n++;
-        if(level % 2 == 1){
+        if((level % 2u) == 1u){
             t = t * 0.9;
         }
-        printf("Next Level:%d, mit n=%d und t=%d\n", level, n, t);
         //-> Vorfuehrphase
         state = 1;
     }
 }
 
-void endModus(){
-    //TODO: Remove Debug print
-    printf("Ende");
+void endModus(void){
     //End-Sequence
     lightLEDs(leds, 4, T_SHORT);
     delay(T_SHORT);
