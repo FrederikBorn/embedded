@@ -2,6 +2,7 @@
 #include "startup.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #define REG(P) (*(volatile uint32_t *) (P))
 
@@ -27,6 +28,8 @@
 #define T_LONG 2000
 #define T_VERY_LONG 4000
 
+#define SYS_SPEED 5
+
 const int leds[] = {GREEN_LED, BLUE_LED, YELLOW_LED, RED_LED};
 const int buttons[] = {GREEN_BUTTON, BLUE_BUTTON, YELLOW_BUTTON, RED_BUTTON};
 
@@ -35,8 +38,10 @@ void setupButtons(const int pButtons[], int size);
 int pollButtons(const int pButtons[], int size);
 void delay(int mod);
 void lightLEDs(const int pLeds[], int size, int duration);
+void testDelays();
 void testLEDs();
 void testButtons(int pDelay);
+void testLevelBin(int level);
 
 int main (void)
 {
@@ -45,9 +50,41 @@ int main (void)
 
 	while(1)
 	{
-		testLEDs();
+		//testDelays();
+		//testLEDs();
 		//testButtons(200);
+		for(int i = 0; i < 16; i++){
+			printf("%d", i);
+			testLevelBin(i);
+		}
 	}
+}
+
+void testLevelBin(int level){
+	//Lost-Sequence/End-Flash
+    for(int i = 0; i < 2; i++){
+        const int ledsToLight[2] = {RED_LED, GREEN_LED};
+        lightLEDs(ledsToLight, 2, T_SHORT);
+    }
+    
+    //TODO:Letztes Level als Binäre Zahl, LSB rechts(rot)
+    bool bin[4] = {false};
+    for(int i = 0; i < 4; i++){
+        if((level & (1 << i)) > 0){
+            bin[3-i] = true;
+        }
+    }
+    
+    int count = 0;
+    int ledsToLight[4] = {0};
+    for(int i = 0; i < 4; i++){
+        if(bin[i]){
+            ledsToLight[count] = leds[i];
+            count += 1;
+        }
+    }
+
+    lightLEDs(ledsToLight, count, T_LONG);
 }
 
 //Testing Buttons, toggling respective LED on each press
@@ -71,6 +108,11 @@ void testLEDs(){
 	lightLEDs(ledsToLight2, 2, T_LONG);
 	delay(T_VERY_LONG);
 	lightLEDs(leds, 4, T_VERY_LONG);
+}
+
+void testDelays(){
+	lightLEDs(leds, 4, T_SHORT*10);
+	delay(T_SHORT*10);
 }
 
 //Setting up LEDs as Output
@@ -116,11 +158,10 @@ int pollButtons(const int pButtons[], int size){
 	return buttonsPressed > 1 ? -2 : firstButton;
 }
 
-//Mit mod 1000 in etwa 0.8sec auf Simulator -> T_VERY_LONG etwa 3 sec
 void delay(int mod)
 {
     volatile uint32_t i = 0;
-	for (i = 0; i < (150*mod); i++){}
+	for (i = 0; i < (15*SYS_SPEED*mod); i++){}
 }
 
 //Lights given amount of LEDs for the given time
