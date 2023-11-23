@@ -26,7 +26,7 @@
 #define T_LONG 2000
 #define T_VERY_LONG 4000
 
-#define SYS_SPEED 5//~60 for the real hardware, 5-10 on simulator, choose higher the faster the processor
+#define SYS_SPEED 60//~60 for the real hardware, 3-10 on simulator -> choose higher the faster the processor
 
 
 static uint32_t level = 1;
@@ -174,7 +174,7 @@ void vorfuehrPhase(void){
     lightLEDs(ledsToLight, 2, T_SHORT);
     delay(T_SHORT);
     //Generating main sequence
-    //Init with size 12(Max n) as n doesnt work for some reason
+    //Init with size 12(Max n)
     int sequence[12] = {0};
     for(int i = 0; i < n; i++){
         sequence[i] = rand() % 4; //Random int between 0 and 3
@@ -193,7 +193,7 @@ void vorfuehrPhase(void){
 
 void nachahmPhase(int sequence[]){
     int pollRate = 200; //Magic Number :D
-    int iterations = t/pollRate; //Every iteration takes at least <pollrate>units due to poll delay -> all iterations should roughly take t
+    int iterations = t/pollRate; //Every iteration takes at least <pollrate> units due to poll delay -> all iterations should roughly take t
     int j = -1;
     bool lost = false;
     for(int h = 0; h < n; h++){//Sequence has size n
@@ -202,10 +202,12 @@ void nachahmPhase(int sequence[]){
             delay(200);
             j = pollButtons(buttons, 4);
             if(j != -1){
+                //Button pressed
                 break;
             }
         }
         if(j != sequence[h]){
+            //Wrong or multiple Buttons
             lost = true;
             break;
         }
@@ -231,6 +233,7 @@ void verlorenSequenz(void){
         lightLEDs(ledsToLight, 2, T_SHORT);
     }
     
+    //Showing last completed level-number binary coded, Red LED as LSB
     level -= 1u;
     bool bin[4] = {false, false, false, false};
     for(int i = 0; i < 4; i++){
